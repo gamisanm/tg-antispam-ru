@@ -898,7 +898,7 @@ function spamScore(dirtyText) {
 const LINK_TOKEN = /https?:\/\/|t\.me\/|^@\w|\w\.[a-z]{2,}/i;
 
 // True if the message carries a real link/@mention to a trusted resource
-// (config.trustedLinks). A bare word doesn't count — spammers can type "promin".
+// (config.trustedLinks). A bare word doesn't count — spammers can type a channel name too.
 function hasTrustedLink(text, trusted) {
     const list = trusted.map(w => w.toLowerCase());
     return text.split(/\s+/).some(tok =>
