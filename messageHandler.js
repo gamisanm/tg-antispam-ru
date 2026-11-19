@@ -6,7 +6,7 @@ const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 // Bump this when rules change — printed at startup so it's obvious which
 // version of the filter the running process has loaded.
-const RULES_VERSION = '2026-11-19b';
+const RULES_VERSION = '2026-11-20';
 
 const HOMOGLYPH_MAP = {
     // Latin → Cyrillic
@@ -894,6 +894,33 @@ function spamScore(dirtyText) {
     return { score, reasons };
 }
 
+// A whitespace-delimited token that is a link, domain or @mention
+const LINK_TOKEN = /https?:\/\/|t\.me\/|^@\w|\w\.[a-z]{2,}/i;
+
+// True if the message carries a real link/@mention to a trusted resource
+// (config.trustedLinks). A bare word doesn't count — spammers can type "promin".
+function hasTrustedLink(text, trusted) {
+    const list = trusted.map(w => w.toLowerCase());
+    return text.split(/\s+/).some(tok =>
+        LINK_TOKEN.test(tok) && list.some(w => tok.toLowerCase().includes(w)));
+}
+
+// Removes whitelisted links/words so they don't add link penalties, while the
+// rest of the message is still scored. "Работа в Glovo 5000р пиши в лс"
+// becomes "Работа в   5000р пиши в лс" and gets caught.
+function stripTrusted(text, words) {
+    let out = text;
+    const list = words.map(w => w.toLowerCase());
+    // Multi-word entries (phone numbers "792 492 700") first, as plain substrings
+    for (const w of list.filter(w => /\s/.test(w))) {
+        out = out.split(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).join(' ');
+    }
+    const single = list.filter(w => !/\s/.test(w));
+    return out.split(/(\s+)/)
+        .map(tok => single.some(w => tok.toLowerCase().includes(w)) ? ' ' : tok)
+        .join('');
+}
+
 class MessageHandler {
     constructor(bot) {
         this.bot = bot;
@@ -972,23 +999,25 @@ class MessageHandler {
         if (!fullText.trim()) return;
 
         try {
-            // Whitelist check — always keep messages with trusted links/names
-            const lowerFull = fullText.toLowerCase();
-            const whitelisted = config.wordsToKeep.some(w => lowerFull.includes(w.toLowerCase()));
-            if (whitelisted) {
-                console.log(`[DEBUG] Whitelisted message from ${msg.from.id}`);
+            // Links to the chat's own resources skip the check entirely;
+            // other whitelisted links/words only lose their link penalty.
+            const trustedLinks = config.trustedLinks || [];
+            if (hasTrustedLink(fullText, trustedLinks)) {
+                console.log(`[DEBUG] Trusted link in message from ${msg.from.id}`);
                 this.reputation.recordMessage(msg.chat.id, msg.from.id);
                 return;
             }
-
-            const { score, reasons } = spamScore(fullText);
+            const keepWords = [...config.wordsToKeep, ...trustedLinks];
+            const { score, reasons } = spamScore(stripTrusted(fullText, keepWords));
             let totalScore = score;
 
             // Hidden hyperlink in message text (e.g. "Пишите Виктория" where name is a link).
             // Strong signal, but scored (not instant delete) so established members
             // posting formatted links aren't nuked.
             const entities = [...(msg.entities || []), ...(msg.caption_entities || [])];
-            const hiddenLinks = entities.filter(e => e.type === 'text_link').length;
+            // Hidden links pointing at whitelisted sites aren't disguise
+            const hiddenLinks = entities.filter(e => e.type === 'text_link'
+                && !keepWords.some(w => (e.url || '').toLowerCase().includes(w.toLowerCase()))).length;
             if (hiddenLinks >= 2) {
                 // Several disguised links ("[PLAY NOW]" x3) — no legit message does this
                 totalScore += 6;

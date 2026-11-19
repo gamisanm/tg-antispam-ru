@@ -5,8 +5,9 @@
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, 'messageHandler.js'), 'utf8');
 const mod = { exports: {} };
-new Function('module', 'exports', 'require', src + '; module.exports.spamScore = spamScore;')(mod, mod.exports, require);
-const spamScore = mod.exports.spamScore;
+new Function('module', 'exports', 'require', src + '; module.exports.spamScore = spamScore; module.exports.stripTrusted = stripTrusted; module.exports.hasTrustedLink = hasTrustedLink;')(mod, mod.exports, require);
+const { spamScore, stripTrusted, hasTrustedLink } = mod.exports;
+const config = require('./config');
 
 const ZW = '​';
 
@@ -331,5 +332,30 @@ for (const [t, expectSpam] of cases) {
     console.log('FAIL', spam ? 'DEL ' : 'KEEP', `score=${score}`, reasons.join(',') || '-', '|', JSON.stringify(t.slice(0, 60)));
   }
 }
-console.log(fail === 0 ? `ALL ${cases.length} PASSED` : `${fail} FAILURES out of ${cases.length}`);
+// Whitelist: [текст, должен ли удаляться] — как в handleMessage: доверенная
+// ссылка пропускает проверку, остальные слова белого списка только вырезаются.
+// Записи берутся из config.js; без trustedLinks кейсы с доверенной ссылкой пропускаются.
+const trusted = config.trustedLinks || [];
+const keepWords = [...config.wordsToKeep, ...trusted];
+const whitelistCases = [
+  ['Работа в Glovo, 5000р в день, пиши в лс', true],
+  ['Курьер в Uber Eats, от 10000р за выход, подробности в лс', true],
+  ['видео тут https://youtube.com/watch?v=abc', false],
+  ['кто знает, glovo сегодня платит бонус?', false],
+];
+if (trusted.length) {
+  whitelistCases.push(
+    [`Требуется водитель, 5000 зл в месяц, пишите в лс https://${trusted.find(w => w.includes('.')) || trusted[0] + '.com'}`, false],
+    [`Работа ${trusted[0]}, от 10000р за выход, пиши в лс`, true], // слово без ссылки — проверяется
+  );
+}
+for (const [t, expectSpam] of whitelistCases) {
+  const spam = !hasTrustedLink(t, trusted) && spamScore(stripTrusted(t, keepWords)).score >= 4;
+  if (spam !== expectSpam) {
+    fail++;
+    console.log('FAIL whitelist', spam ? 'DEL ' : 'KEEP', '|', JSON.stringify(t.slice(0, 60)));
+  }
+}
+const total = cases.length + whitelistCases.length;
+console.log(fail === 0 ? `ALL ${total} PASSED` : `${fail} FAILURES out of ${total}`);
 process.exit(fail === 0 ? 0 : 1);

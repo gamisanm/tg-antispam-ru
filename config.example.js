@@ -141,14 +141,20 @@ const config = {
     // Score at which the sender is also banned, not just the message deleted.
     // Reputation bonus is added on top, so regulars are shielded here too.
     banScoreThreshold: 7,
-    // Whitelist: a message containing any of these is NOT checked at all.
-    // Keep it to your own channels / trusted sites — spammers can type these too.
+    // Trusted sites that only lose their link penalty — the rest of the message
+    // is still checked, so "работа в YouTube, 5000р, пиши в лс" is still caught.
     wordsToKeep: [
       "youtube.com",
       "youtu.be",
       "docs.google.com",
       "telegra.ph",
+    ],
+    // Your own channels/sites and trusted contacts: a message with a real link
+    // or @mention to one of these is not checked at all. A bare word without
+    // a link does not count, so spammers can't bypass the filter by typing it.
+    trustedLinks: [
       // "your_channel",
+      // "your-site.com",
     ],
     // Users whose messages are never checked (admins, trusted regulars).
     // Telegram user ids, e.g. from @userinfobot.
