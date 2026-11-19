@@ -1,0 +1,18 @@
+{
+  "name": "tg-antispam-ru",
+  "version": "1.0.0",
+  "description": "Антиспам-бот для русскоязычных Telegram-чатов: правила, репутация, команды /spam, /report, /delete",
+  "main": "delete.js",
+  "scripts": {
+    "start": "node delete.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}

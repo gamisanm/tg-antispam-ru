@@ -1,0 +1,13 @@
+# secrets and per-chat settings
+.env
+config.js
+
+# runtime state
+userStats.json
+watchers.json
+
+# chat exports (contain members' personal data)
+data/
+
+node_modules/
+.DS_Store
